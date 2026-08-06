@@ -1,0 +1,474 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [development]
+
+  schedule:
+    - cron: '0 5 * * 1,4'
+
+  workflow_dispatch:
+    inputs:
+      target_repo:
+        description: 'Target repository to scan (e.g. juice-shop/juice-shop)'
+        required: false
+        default: ''
+      target_url:
+        description: 'Target URL for ZAP DAST scan (e.g. http://3.142.20.141:3000)'
+        required: false
+        default: ''
+
+jobs:
+
+# -------------------------
+# 1. BUILD FRONTEND (always uses this repo)
+# -------------------------
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install & Build
+        run: |
+          cd app/frontend
+          npm install
+          npm run build
+
+# -------------------------
+# 2. SECURITY SCANS (all parallel, check out scan target repo)
+# -------------------------
+  npm_audit:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout scan target
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.target_repo || github.repository }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run NPM Audit
+        run: |
+          mkdir -p scan-results
+          if [ -f package.json ]; then
+            npm install --ignore-scripts || true
+            npm audit --json > scan-results/npm-audit.json || true
+          elif [ -f app/frontend/package.json ]; then
+            cd app/frontend
+            npm install --ignore-scripts || true
+            npm audit --json > ../scan-results/npm-audit.json || true
+          else
+            echo '{}' > scan-results/npm-audit.json
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit
+          path: scan-results/npm-audit.json
+
+  semgrep:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout scan target
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.target_repo || github.repository }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Semgrep
+        run: |
+          mkdir -p scan-results
+          pip install semgrep
+          semgrep scan --config auto --json > scan-results/semgrep.json || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: semgrep
+          path: scan-results/semgrep.json
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout scan target
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.target_repo || github.repository }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Run GitLeaks
+        run: |
+          mkdir -p scan-results
+          docker run --rm -v $(pwd):/repo zricethezav/gitleaks detect \
+            --source=/repo \
+            --report-format json \
+            --report-path /repo/scan-results/gitleaks.json || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks
+          path: scan-results/gitleaks.json
+
+  trivy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout scan target
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.target_repo || github.repository }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh
+
+      - name: Run Trivy
+        run: |
+          mkdir -p scan-results
+          trivy fs . --format json --output scan-results/trivy.json || true
+          if [ ! -f scan-results/trivy.json ]; then
+            echo '{}' > scan-results/trivy.json
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trivy
+          path: scan-results/trivy.json
+
+  checkov:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout scan target
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.inputs.target_repo || github.repository }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run Checkov
+        run: |
+          mkdir -p scan-results
+          pip install checkov
+          checkov -d . --output json > scan-results/checkov.json || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: checkov
+          path: scan-results/checkov.json
+
+  zap_scan:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Check if target URL provided
+        id: check_url
+        run: |
+          if [ -z "${{ github.event.inputs.target_url }}" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "No target URL provided — skipping ZAP scan"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "Target URL: ${{ github.event.inputs.target_url }}"
+          fi
+
+      - name: Run ZAP Full Scan
+        if: steps.check_url.outputs.skip == 'false'
+        run: |
+          mkdir -p zap-results
+          docker run --rm \
+            -v "$(pwd)/zap-results:/zap/wrk/:rw" \
+            -t ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py \
+            -t "${{ github.event.inputs.target_url }}" \
+            -r zap-report.html \
+            -J zap-report.json \
+            -m 5 \
+            -I || true
+
+      - name: Create empty ZAP result if skipped or failed
+        if: always()
+        run: |
+          mkdir -p zap-results
+          if [ ! -f zap-results/zap-report.json ]; then
+            echo '{"site":[]}' > zap-results/zap-report.json
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-results
+          path: zap-results/zap-report.json
+
+# -------------------------
+# 3. DEFECTDOJO UPLOAD
+# -------------------------
+  defectdojo:
+    runs-on: ubuntu-latest
+    needs: [npm_audit, semgrep, gitleaks, trivy, checkov, zap_scan]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Download all scan artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: scan-results/
+          merge-multiple: true
+
+      - name: Setup engagement and upload results
+        run: python ai-agent/defectdojo_setup.py
+        env:
+          DEFECTDOJO_URL:     ${{ secrets.DEFECTDOJO_URL }}
+          DEFECTDOJO_API_KEY: ${{ secrets.DEFECTDOJO_API_KEY }}
+          TARGET_REPOSITORY:  ${{ github.event.inputs.target_repo || github.repository }}
+          SCAN_RESULTS_DIR:   scan-results/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engagement-id
+          path: reports/engagement_id.txt
+          retention-days: 1
+
+# -------------------------
+# 4. AI TRIAGE
+# -------------------------
+  ai_triage:
+    runs-on: ubuntu-latest
+    needs: defectdojo
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests anthropic
+
+      - name: Create reports directory
+        run: mkdir -p reports
+
+      - name: Download engagement ID
+        uses: actions/download-artifact@v4
+        with:
+          name: engagement-id
+          path: reports/
+        continue-on-error: true
+
+      - name: Run AI triage agent
+        run: python ai-agent/context_triage_agent.py
+        env:
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          DEFECTDOJO_URL:     ${{ secrets.DEFECTDOJO_URL }}
+          DEFECTDOJO_API_KEY: ${{ secrets.DEFECTDOJO_API_KEY }}
+          GITHUB_TOKEN:       ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY:  ${{ github.event.inputs.target_repo || github.repository }}
+          MAX_FINDINGS:       "20"
+        continue-on-error: true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: triage-summary
+          path: reports/triage-summary.json
+          retention-days: 30
+        continue-on-error: true
+
+# -------------------------
+# 5. GENERATE SECURITY REPORT
+# -------------------------
+  generate_report:
+    runs-on: ubuntu-latest
+    needs: ai_triage
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests anthropic
+
+      - name: Create reports directory
+        run: mkdir -p reports
+
+      - name: Download triage summary
+        uses: actions/download-artifact@v4
+        with:
+          name: triage-summary
+          path: reports/
+        continue-on-error: true
+
+      - name: Download semgrep results
+        uses: actions/download-artifact@v4
+        with:
+          name: semgrep
+          path: reports/
+        continue-on-error: true
+
+      - name: Download trivy results
+        uses: actions/download-artifact@v4
+        with:
+          name: trivy
+          path: reports/
+        continue-on-error: true
+
+      - name: Download checkov results
+        uses: actions/download-artifact@v4
+        with:
+          name: checkov
+          path: reports/
+        continue-on-error: true
+
+      - name: Download npm-audit results
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-audit
+          path: reports/
+        continue-on-error: true
+
+      - name: Download ZAP results
+        uses: actions/download-artifact@v4
+        with:
+          name: zap-results
+          path: reports/
+        continue-on-error: true
+
+      - name: Generate AI security report
+        run: python ai-agent/report_generator.py
+        env:
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          REPORTS_DIR:        reports/
+          TARGET_REPOSITORY:  ${{ github.event.inputs.target_repo || github.repository }}
+        continue-on-error: true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: reports/security-report.md
+          retention-days: 90
+
+# -------------------------
+# 6. TERRAFORM
+# -------------------------
+  terraform:
+    runs-on: ubuntu-latest
+    needs: defectdojo
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ secrets.AWS_REGION }}
+
+      - name: Terraform Init
+        working-directory: infrastructure/terraform
+        run: terraform init
+
+      - name: Terraform Validate
+        working-directory: infrastructure/terraform
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: infrastructure/terraform
+        run: terraform plan
+
+# -------------------------
+# 7. DEPLOY
+# -------------------------
+  deploy:
+    runs-on: ubuntu-latest
+    needs: terraform
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host:     ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key:      ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/capstone-group3
+            git pull origin development
+            cd app/backend
+            npm install
+            cd ../frontend
+            rm -rf dist
+            npm install
+            npm run build
+            sudo systemctl restart nginx
+            pm2 restart server --update-env
+
+# -------------------------
+# 8. VERIFY
+# -------------------------
+  verify:
+    runs-on: ubuntu-latest
+    needs: deploy
+    steps:
+      - name: Verify Backend
+        run: curl -f http://${{ secrets.EC2_HOST }}/api/health || exit 1
+
+# -------------------------
+# 9. UPLOAD ZAP TO DEFECTDOJO
+# -------------------------
+  upload_zap:
+    runs-on: ubuntu-latest
+    needs: [verify, defectdojo]
+    if: always()
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Download ZAP Results
+        uses: actions/download-artifact@v4
+        with:
+          name: zap-results
+          path: zap-results/
+        continue-on-error: true
+
+      - name: Download engagement ID
+        uses: actions/download-artifact@v4
+        with:
+          name: engagement-id
+          path: reports/
+        continue-on-error: true
+
+      - name: Upload ZAP to DefectDojo
+        run: |
+          ENGAGEMENT_ID=$(cat reports/engagement_id.txt 2>/dev/null || echo "1")
+          ZAP_FILE="zap-results/zap-report.json"
+          if [ ! -f "$ZAP_FILE" ] || [ "$(cat $ZAP_FILE)" = '{"site":[]}' ]; then
+            echo "No ZAP results to upload — skipping"
+            exit 0
+          fi
+          curl -X POST "${{ secrets.DEFECTDOJO_URL }}/api/v2/import-scan/" \
+            -H "Authorization: Token ${{ secrets.DEFECTDOJO_API_KEY }}" \
+            -F "file=@$ZAP_FILE" \
+            -F "scan_type=ZAP Scan" \
+            -F "engagement=$ENGAGEMENT_ID"

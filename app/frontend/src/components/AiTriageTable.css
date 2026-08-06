@@ -1,0 +1,76 @@
+.triage-wrap { display: flex; flex-direction: column; gap: 1rem; }
+
+.triage-impact {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--color-bg-secondary, #f9f9f9);
+  border-radius: 8px;
+  padding: 0.75rem 1.25rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.impact-stat { display: flex; flex-direction: column; align-items: center; padding: 0 1.25rem; }
+.impact-divider { width: 1px; height: 32px; background: #e0e0e0; }
+.impact-val { font-size: 22px; font-weight: 500; color: var(--color-text-primary); }
+.impact-val.tp { color: #1D9E75; }
+.impact-val.fp { color: #EF9F27; }
+.impact-val.reduction { color: #378ADD; }
+.impact-label { font-size: 11px; color: #888; margin-top: 2px; }
+
+.triage-table-wrap { overflow-x: auto; }
+.triage-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.triage-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 500;
+  color: #888;
+  padding: 0 12px 8px 0;
+  border-bottom: 1px solid #eee;
+  white-space: nowrap;
+}
+.triage-table td {
+  padding: 10px 12px 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+  vertical-align: top;
+}
+.triage-table tr:last-child td { border-bottom: none; }
+
+.finding-title { font-weight: 500; color: var(--color-text-primary); }
+.finding-file  { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; font-family: monospace; }
+.scanner-name  { font-size: 12px; color: var(--color-text-secondary); }
+.reason-text   { font-size: 12px; color: var(--color-text-secondary); max-width: 220px; display: block; }
+.triage-table th { text-align: left; font-size: 11px; font-weight: 500; color: var(--color-text-secondary); padding: 0 12px 8px 0; border-bottom: 1px solid var(--color-border-tertiary); white-space: nowrap; }
+.triage-table td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--color-border-tertiary); vertical-align: top; }
+.triage-impact { display: flex; align-items: center; gap: 0; background: var(--color-background-secondary); border-radius: 8px; padding: 0.75rem 1.25rem; flex-wrap: wrap; gap: 0.5rem; }
+.impact-label { font-size: 11px; color: var(--color-text-secondary); margin-top: 2px; }
+.confidence-label { font-size: 11px; color: var(--color-text-secondary); margin-left: 4px; }
+.triage-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 2rem; color: var(--color-text-secondary); text-align: center; }
+
+/* Severity badges */
+.sev-badge { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+.sev-critical { background: #FCEBEB; color: #A32D2D; }
+.sev-high     { background: #FAEEDA; color: #854F0B; }
+.sev-medium   { background: #E6F1FB; color: #185FA5; }
+.sev-low      { background: #EAF3DE; color: #3B6D11; }
+.sev-info     { background: #f0f0f0; color: #555; }
+
+/* Verdict badges */
+.verdict-badge { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+.verdict-tp     { background: #EAF3DE; color: #3B6D11; }
+.verdict-fp     { background: #FAEEDA; color: #854F0B; }
+.verdict-review { background: #f0f0f0; color: #555; }
+
+/* Confidence pips */
+.confidence-pips { display: flex; align-items: center; gap: 3px; }
+.pip { width: 8px; height: 8px; border-radius: 2px; background: #e0e0e0; }
+.pip-filled-high   { background: #1D9E75; }
+.pip-filled-medium { background: #378ADD; }
+.pip-filled-low    { background: #EF9F27; }
+.confidence-label  { font-size: 11px; color: #888; margin-left: 4px; }
+
+.triage-empty {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 8px; padding: 2rem; color: #999; text-align: center;
+}
+.triage-empty p { font-size: 13px; max-width: 300px; }

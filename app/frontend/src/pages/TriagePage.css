@@ -1,0 +1,2 @@
+.triage-page { display: flex; flex-direction: column; gap: 1.5rem; }
+.triage-page .page-top { margin-bottom: 0; }

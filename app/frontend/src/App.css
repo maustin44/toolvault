@@ -1,0 +1,109 @@
+.app-layout {
+  min-height: 100vh;
+  background: var(--bg-page);
+  display: flex;
+}
+
+/* SIDEBAR */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 260px;
+  height: 100vh;
+}
+
+/* MAIN LAYOUT */
+.main-content {
+  margin-left: 80px;
+  flex: 1;
+
+  padding: 32px;
+  min-height: 100vh;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+/* WRAPPER (IMPORTANT: NO CENTERING BUG) */
+.main-wrapper {
+  width: 100%;
+  max-width: none;
+}
+
+/* =========================
+   BACKGROUND GLOW SYSTEM
+========================= */
+
+.bg-glow-container {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Ensure app fills screen */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+/* Glow base */
+.glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.35;
+}
+
+/* Blue */
+.glow-1 {
+  width: 420px;
+  height: 420px;
+  background: rgba(59, 130, 246, 0.5);
+  top: -120px;
+  left: -120px;
+}
+
+/* Purple */
+.glow-2 {
+  width: 520px;
+  height: 520px;
+  background: rgba(139, 92, 246, 0.35);
+  top: 200px;
+  right: -180px;
+}
+
+/* Red */
+.glow-3 {
+  width: 480px;
+  height: 480px;
+  background: rgba(239, 68, 68, 0.22);
+  bottom: -160px;
+  left: 35%;
+}
+
+/* LAYERING */
+.app-layout,
+.main-content,
+.sidebar,
+.navbar {
+  position: relative;
+  z-index: 1;
+}
+
+/* =========================
+   RESPONSIVE FIX (CORRECTED)
+========================= */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 100%;
+    height: 52px;
+  }
+
+  .main-content {
+    margin-left: 0;
+    padding: 68px 16px 20px;
+  }
+}
