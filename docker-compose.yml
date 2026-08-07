@@ -1,0 +1,131 @@
+---
+# ToolVault local stack.
+#
+#   docker compose up -d
+#
+# Services:
+#   ToolVault UI    http://localhost:8081
+#   ToolVault API   http://localhost:3001
+#   DefectDojo      http://localhost:8080
+#   Juice Shop      http://localhost:3000   (DAST target, enable with --profile dast)
+#
+# Copy .env.local.example to .env before starting.
+
+services:
+
+  # ── DefectDojo ────────────────────────────────────────────────
+  dd-postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: defectdojo
+      POSTGRES_USER: defectdojo
+      POSTGRES_PASSWORD: ${DD_DATABASE_PASSWORD:-defectdojo}
+    volumes:
+      - dd-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U defectdojo"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  dd-redis:
+    image: redis:7-alpine
+    volumes:
+      - dd-redis:/data
+
+  dd-initializer:
+    image: defectdojo/defectdojo-django:latest
+    entrypoint: ['/entrypoint-initializer.sh']
+    depends_on:
+      dd-postgres:
+        condition: service_healthy
+    environment: &dd-env
+      DD_DEBUG: 'False'
+      DD_ALLOWED_HOSTS: '*'
+      DD_DATABASE_URL: postgresql://defectdojo:${DD_DATABASE_PASSWORD:-defectdojo}@dd-postgres:5432/defectdojo
+      DD_CELERY_BROKER_URL: redis://dd-redis:6379/0
+      DD_SECRET_KEY: ${DD_SECRET_KEY:-changeme-local-only}
+      DD_CREDENTIAL_AES_256_KEY: ${DD_CREDENTIAL_AES_256_KEY:-changeme-local-only}
+      DD_ADMIN_USER: ${DD_ADMIN_USER:-admin}
+      DD_ADMIN_PASSWORD: ${DD_ADMIN_PASSWORD:-admin}
+    volumes:
+      - dd-media:/app/media
+
+  dd-uwsgi:
+    image: defectdojo/defectdojo-django:latest
+    entrypoint: ['/entrypoint-uwsgi.sh']
+    depends_on:
+      dd-postgres:
+        condition: service_healthy
+      dd-initializer:
+        condition: service_completed_successfully
+    environment: *dd-env
+    volumes:
+      - dd-media:/app/media
+
+  dd-celeryworker:
+    image: defectdojo/defectdojo-django:latest
+    entrypoint: ['/entrypoint-celery-worker.sh']
+    depends_on:
+      dd-initializer:
+        condition: service_completed_successfully
+    environment: *dd-env
+    volumes:
+      - dd-media:/app/media
+
+  dd-celerybeat:
+    image: defectdojo/defectdojo-django:latest
+    entrypoint: ['/entrypoint-celery-beat.sh']
+    depends_on:
+      dd-initializer:
+        condition: service_completed_successfully
+    environment: *dd-env
+
+  defectdojo:
+    image: defectdojo/defectdojo-nginx:latest
+    depends_on:
+      - dd-uwsgi
+    environment:
+      DD_UWSGI_HOST: dd-uwsgi
+      DD_UWSGI_PORT: 3031
+    ports:
+      - "8080:8080"
+    volumes:
+      - dd-media:/usr/share/nginx/html/media
+
+  # ── ToolVault ─────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./app/backend
+    environment:
+      PORT: 3001
+      JWT_SECRET: ${JWT_SECRET:-local-dev-secret}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GITHUB_ORG: ${GITHUB_ORG:-}
+      DEFECTDOJO_URL: http://defectdojo:8080
+      DEFECTDOJO_API_KEY: ${DEFECTDOJO_API_KEY:-}
+      CORS_ORIGIN: http://localhost:8081
+    ports:
+      - "3001:3001"
+    depends_on:
+      - defectdojo
+
+  frontend:
+    build:
+      context: ./app/frontend
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+
+  # ── DAST target ───────────────────────────────────────────────
+  juice-shop:
+    image: bkimminich/juice-shop:latest
+    ports:
+      - "3000:3000"
+    profiles: ["dast"]
+
+volumes:
+  dd-postgres:
+  dd-redis:
+  dd-media:
