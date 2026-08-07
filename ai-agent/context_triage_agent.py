@@ -139,12 +139,14 @@ def main():
     print(f'[triage] {len(findings)} findings to triage')
 
     verdicts = {'true_positive': 0, 'false_positive': 0, 'needs_review': 0, 'error': 0}
+    results  = {}
     for f in findings:
         print(f'  [{f.get("severity","?")}] #{f["id"]}: {f.get("title","?")[:60]}')
         try:
             vd = ask_claude(f, get_code_context(f.get('file_path'), f.get('line')))
             v  = vd.get('verdict', 'needs_review')
             verdicts[v] = verdicts.get(v, 0) + 1
+            results[f['id']] = vd
             print(f'       → {v} ({vd.get("confidence","?")})')
             post_note(f['id'], vd)
         except Exception as e:
@@ -157,7 +159,16 @@ def main():
             'total': len(findings),
             'verdicts': verdicts,
             'engagement_id': ENGAGEMENT_ID,
-            'findings': [{'id': f['id'], 'title': f.get('title'), 'severity': f.get('severity'), 'file_path': f.get('file_path')} for f in findings]
+            'findings': [{
+                'id': f['id'],
+                'title': f.get('title'),
+                'severity': f.get('severity'),
+                'file_path': f.get('file_path'),
+                'line': f.get('line'),
+                'verdict': results.get(f['id'], {}).get('verdict'),
+                'confidence': results.get(f['id'], {}).get('confidence'),
+                'remediation': results.get(f['id'], {}).get('remediation'),
+            } for f in findings]
         }, fh, indent=2)
     print('[triage] Done.')
 
