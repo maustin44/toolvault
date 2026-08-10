@@ -7,8 +7,10 @@ set -uxo pipefail
 # usual /var/log/cloud-init-output.log, so a failure here is visible without
 # digging through all of cloud-init.
 #
-# Note: this file is rendered by Terraform's templatefile(), so ${repository_url}
-# is substituted at plan time. Shell variables must avoid ${...} syntax.
+# NOTE: this file is rendered by Terraform's templatefile(). Terraform
+# substitutes dollar-brace expressions, so repository_url below is filled in
+# at plan time. Shell variables here must be written bare (FOO, not braced),
+# or Terraform will try to parse them and fail.
 
 exec > >(tee -a /var/log/toolvault-bootstrap.log) 2>&1
 echo "=== ToolVault bootstrap starting $(date) ==="
@@ -64,12 +66,19 @@ chown -R ec2-user:ec2-user toolvault
 
 cd toolvault
 
-# Secrets are not baked into the AMI or user_data. Drop a real .env here
-# (via SSM Session Manager) and restart, or the stack comes up with
-# local-only defaults.
+# Secrets are not baked into the AMI or user_data. JWT_SECRET has no safe
+# default - the backend exits immediately without it - so generate real
+# values here rather than leaving the example placeholders.
 if [ ! -f .env ]; then
     cp .env.local.example .env || true
+    JWT=$(openssl rand -base64 32)
+    DDSK=$(openssl rand -base64 32)
+    DDAES=$(openssl rand -base64 32)
+    sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$JWT|" .env
+    sed -i "s|^DD_SECRET_KEY=.*|DD_SECRET_KEY=$DDSK|" .env
+    sed -i "s|^DD_CREDENTIAL_AES_256_KEY=.*|DD_CREDENTIAL_AES_256_KEY=$DDAES|" .env
     chown ec2-user:ec2-user .env
+    chmod 600 .env
 fi
 
 # Register the service first so the stack survives a reboot even if this
@@ -96,8 +105,8 @@ UNIT
 systemctl daemon-reload
 systemctl enable toolvault.service
 
-# Building the two Node images on a 2-vCPU box takes a while. Failures here
-# should not abort the rest of the bootstrap - the logs above will show why.
+# Building the frontend and backend on a 2-vCPU box takes a while. Failures
+# here should not abort the rest of the bootstrap - the logs above show why.
 echo "--- building and starting stack (this takes several minutes)"
 sudo -u ec2-user docker compose up -d --build
 STATUS=$?
