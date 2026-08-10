@@ -6,6 +6,9 @@ set -uxo pipefail
 # Progress is written to /var/log/toolvault-bootstrap.log as well as the
 # usual /var/log/cloud-init-output.log, so a failure here is visible without
 # digging through all of cloud-init.
+#
+# Note: this file is rendered by Terraform's templatefile(), so ${repository_url}
+# is substituted at plan time. Shell variables must avoid ${...} syntax.
 
 exec > >(tee -a /var/log/toolvault-bootstrap.log) 2>&1
 echo "=== ToolVault bootstrap starting $(date) ==="
@@ -19,7 +22,8 @@ usermod -aG docker ec2-user
 PLUGIN_DIR=/usr/local/lib/docker/cli-plugins
 mkdir -p "$PLUGIN_DIR"
 
-# Compose v2 as a docker CLI plugin
+# Compose v2 as a docker CLI plugin. Its release asset name has no version
+# in it, so the /latest/download/ shortcut works.
 echo "--- installing docker compose"
 curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64" \
     -o "$PLUGIN_DIR/docker-compose"
@@ -29,8 +33,18 @@ chmod +x "$PLUGIN_DIR/docker-compose"
 # refuses to build with ("compose build requires buildx 0.17.0 or later").
 # Installing a current release into /usr/local takes precedence over the
 # packaged one in /usr/libexec.
+#
+# buildx asset names DO include the version (buildx-v0.19.3.linux-amd64),
+# so the /latest/download/ shortcut 404s and the tag has to be resolved first.
 echo "--- installing docker buildx"
-curl -SL "https://github.com/docker/buildx/releases/latest/download/buildx-linux-amd64" \
+BUILDX_VER=$(curl -s https://api.github.com/repos/docker/buildx/releases/latest \
+    | grep -oP '"tag_name": "\K[^"]+')
+if [ -z "$BUILDX_VER" ]; then
+    BUILDX_VER=v0.19.3
+    echo "could not resolve latest buildx tag, falling back to $BUILDX_VER"
+fi
+echo "buildx version: $BUILDX_VER"
+curl -SL "https://github.com/docker/buildx/releases/download/$BUILDX_VER/buildx-$BUILDX_VER.linux-amd64" \
     -o "$PLUGIN_DIR/docker-buildx"
 chmod +x "$PLUGIN_DIR/docker-buildx"
 
@@ -83,7 +97,7 @@ systemctl daemon-reload
 systemctl enable toolvault.service
 
 # Building the two Node images on a 2-vCPU box takes a while. Failures here
-# should not abort the rest of the bootstrap — the logs above will show why.
+# should not abort the rest of the bootstrap - the logs above will show why.
 echo "--- building and starting stack (this takes several minutes)"
 sudo -u ec2-user docker compose up -d --build
 STATUS=$?
@@ -91,7 +105,7 @@ STATUS=$?
 if [ $STATUS -eq 0 ]; then
     echo "=== bootstrap complete $(date) ==="
 else
-    echo "=== compose failed with status $STATUS — see above $(date) ==="
+    echo "=== compose failed with status $STATUS - see above $(date) ==="
 fi
 
 sudo -u ec2-user docker compose ps || true
