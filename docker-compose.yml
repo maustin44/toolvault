@@ -1,13 +1,12 @@
 ---
 # ToolVault local stack.
 #
-#   docker compose up -d
+#   docker compose up -d --build
 #
 # Services:
-#   ToolVault UI    http://localhost:8081
-#   ToolVault API   http://localhost:3001
+#   ToolVault       http://localhost:8081
 #   DefectDojo      http://localhost:8080
-#   Juice Shop      http://localhost:3000   (DAST target, enable with --profile dast)
+#   Juice Shop      http://localhost:3000   (DAST target, --profile dast)
 #
 # Copy .env.local.example to .env before starting.
 
@@ -94,29 +93,24 @@ services:
       - dd-media:/usr/share/nginx/html/media
 
   # ── ToolVault ─────────────────────────────────────────────────
-  backend:
+  # One service: Express serves both the API and the built SPA.
+  toolvault:
     build:
-      context: ./app/backend
+      context: ./app
     environment:
       PORT: 3001
-      JWT_SECRET: ${JWT_SECRET:-local-dev-secret}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       GITHUB_ORG: ${GITHUB_ORG:-}
       DEFECTDOJO_URL: http://defectdojo:8080
       DEFECTDOJO_API_KEY: ${DEFECTDOJO_API_KEY:-}
-      CORS_ORIGIN: http://localhost:8081
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AWS_REGION: ${AWS_REGION:-us-east-2}
     ports:
-      - "3001:3001"
+      - "8081:3001"
     depends_on:
       - defectdojo
-
-  frontend:
-    build:
-      context: ./app/frontend
-    ports:
-      - "8081:80"
-    depends_on:
-      - backend
+    restart: unless-stopped
 
   # ── DAST target ───────────────────────────────────────────────
   juice-shop:
