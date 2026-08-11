@@ -39,4 +39,11 @@ COPY backend/ ./
 COPY --from=frontend /build/dist /app/frontend/dist
 
 EXPOSE 3001
-CMD ["node", "server.js"]
+
+# Run node directly rather than through the node image's docker-entrypoint.sh.
+# Under `docker compose up` (no TTY) that wrapper caused the process to exit
+# 0 immediately, producing no output at all and a restart loop; `docker compose
+# run` worked because it allocates a TTY. Setting ENTRYPOINT explicitly makes
+# node PID 1 and removes the wrapper from the picture entirely.
+ENTRYPOINT ["node"]
+CMD ["server.js"]
