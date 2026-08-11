@@ -30,3 +30,5 @@ docker-compose.override.yml
 
 # Security scan results
 scan-results/
+.scan-workspace/
+reports/

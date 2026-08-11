@@ -24,7 +24,7 @@
 //
 // ============================================================
 
-const API_BASE = "http://3.142.20.141/api";
+const API_BASE = "/api";
 
 // --- Token management ---
 // We use sessionStorage (not localStorage) so the session clears

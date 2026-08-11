@@ -38,9 +38,9 @@ async function githubFetch(endpoint) {
 // ----- GET / -----
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const owner = 'malinadettore'
+    const owner = 'maustin44'
 
-    const repoName = req.query.repo || 'capstone-group3'
+    const repoName = req.query.repo || 'toolvault'
 
     // Get recent workflow runs (fetch more to search across both pipelines)
     const runsData = await githubFetch(`/repos/${owner}/${repoName}/actions/runs?per_page=15`)

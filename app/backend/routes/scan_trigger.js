@@ -5,8 +5,8 @@ import { getSetting } from './settings.js'
 const router = Router()
 
 const WORKFLOW_FILE = 'ci-cd-pipeline.yml'
-const SCAN_REPO    = 'capstone-group3'
-const SCAN_OWNER   = 'malinadettore'
+const SCAN_REPO    = 'toolvault'
+const SCAN_OWNER   = 'maustin44'
 
 async function githubFetch(endpoint, options = {}) {
   const token = getSetting('github_token') || process.env.GITHUB_TOKEN
@@ -36,7 +36,7 @@ router.post('/trigger', requireAuth, async (req, res) => {
     await githubFetch(`/repos/${SCAN_OWNER}/${SCAN_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
       method: 'POST',
       body: JSON.stringify({
-        ref: 'development',
+        ref: 'main',
         inputs: {
           target_repo: targetRepo || '',
           target_url:  targetUrl  || '',

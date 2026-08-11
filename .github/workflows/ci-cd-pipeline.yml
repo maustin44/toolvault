@@ -1,12 +1,6 @@
 name: CI/CD Pipeline
 
 on:
-  push:
-    branches: [development]
-
-  schedule:
-    - cron: '0 5 * * 1,4'
-
   workflow_dispatch:
     inputs:
       target_repo:
@@ -17,6 +11,10 @@ on:
         description: 'Target URL for ZAP DAST scan (e.g. http://3.142.20.141:3000)'
         required: false
         default: ''
+      run_terraform:
+        description: 'Apply Terraform infrastructure'
+        type: boolean
+        default: false
 
 jobs:
 
@@ -370,6 +368,7 @@ jobs:
   terraform:
     runs-on: ubuntu-latest
     needs: defectdojo
+    if: inputs.run_terraform == true
     steps:
       - uses: actions/checkout@v4
 
@@ -409,8 +408,8 @@ jobs:
           username: ec2-user
           key:      ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd ~/capstone-group3
-            git pull origin development
+            cd ~/toolvault
+            git pull origin main
             cd app/backend
             npm install
             cd ../frontend

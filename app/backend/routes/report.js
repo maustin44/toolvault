@@ -5,8 +5,8 @@ import AdmZip from 'adm-zip'
 
 const router = Router()
 
-const OWNER = 'malinadettore'
-const REPO  = 'capstone-group3'
+const OWNER = 'maustin44'
+const REPO  = 'toolvault'
 
 async function githubFetch(endpoint) {
   const token = getSetting('github_token') || process.env.GITHUB_TOKEN
