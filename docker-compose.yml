@@ -4,7 +4,7 @@
 #   docker compose up -d --build
 #
 # Services:
-#   ToolVault       http://localhost:8081
+#   ToolVault       http://localhost:8081   (TOOLVAULT_PORT overrides the host port)
 #   DefectDojo      http://localhost:8080
 #   Juice Shop      http://localhost:3000   (DAST target, --profile dast)
 #
@@ -94,6 +94,9 @@ services:
 
   # ── ToolVault ─────────────────────────────────────────────────
   # One service: Express serves both the API and the built SPA.
+  #
+  # The host port is configurable because the EC2 security group opens 80
+  # and 8080 only, while local development has no firewall in the way.
   toolvault:
     build:
       context: ./app
@@ -107,7 +110,7 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       AWS_REGION: ${AWS_REGION:-us-east-2}
     ports:
-      - "8081:3001"
+      - "${TOOLVAULT_PORT:-8081}:3001"
     depends_on:
       - defectdojo
     restart: unless-stopped
