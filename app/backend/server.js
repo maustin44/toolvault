@@ -39,7 +39,15 @@ const app = express()
 
 app.use(securityHeaders)
 app.disable('x-powered-by')
-app.use(cors({ origin: '*', credentials: true }))
+
+// The CORS spec forbids pairing a wildcard origin with credentials, and
+// browsers reject any response that does. Vite marks the module script
+// crossorigin, so the bundle was fetched in CORS mode and refused —
+// producing a blank page while curl, which ignores CORS, saw a clean 200.
+// `origin: true` reflects the requesting origin, which is valid alongside
+// credentials. The SPA is served from this same origin anyway.
+app.use(cors({ origin: true, credentials: true }))
+
 app.use(express.json({ limit: '1mb' }))
 app.use('/api', apiLimiter)
 
