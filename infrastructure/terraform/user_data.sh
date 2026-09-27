@@ -69,6 +69,10 @@ cd toolvault
 # Secrets are not baked into the AMI or user_data. JWT_SECRET has no safe
 # default - the backend exits immediately without it - so generate real
 # values here rather than leaving the example placeholders.
+#
+# TOOLVAULT_PORT is set to 80 here because the security group opens 80 and
+# 8080 only. The compose default of 8081 is for local development, where
+# there is no firewall in the way.
 if [ ! -f .env ]; then
     cp .env.local.example .env || true
     JWT=$(openssl rand -base64 32)
@@ -77,6 +81,7 @@ if [ ! -f .env ]; then
     sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$JWT|" .env
     sed -i "s|^DD_SECRET_KEY=.*|DD_SECRET_KEY=$DDSK|" .env
     sed -i "s|^DD_CREDENTIAL_AES_256_KEY=.*|DD_CREDENTIAL_AES_256_KEY=$DDAES|" .env
+    echo "TOOLVAULT_PORT=80" >> .env
     chown ec2-user:ec2-user .env
     chmod 600 .env
 fi
