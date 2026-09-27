@@ -131,15 +131,6 @@ A representative assessment of `nodejs-goof` identified:
 AI triage confirmed 18 of 20 static findings as true positives and flagged 2
 for manual review.
 
-## A note on the name
-
-This project began as an MCP (Model Context Protocol) integration, which is why
-earlier commits and the original repository name reference MCP. That direction
-was scoped out during development. The final build calls the Anthropic API
-directly at fixed points in the pipeline rather than exposing tools for the
-model to invoke — see `ai-agent/README.md` for detail on how the AI layer
-actually works.
-
 ## License
 
 See [LICENSE](LICENSE).
