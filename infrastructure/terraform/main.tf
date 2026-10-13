@@ -82,21 +82,6 @@ resource "aws_iam_role_policy_attachment" "ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# Read-only EC2 access for ToolVault's AWS page (GET /api/aws).
-resource "aws_iam_role_policy" "ec2_read" {
-  name = "toolvault-${var.environment}-ec2-read"
-  role = aws_iam_role.instance.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["ec2:DescribeInstances", "ec2:DescribeSecurityGroups"]
-      Resource = "*"
-    }]
-  })
-}
-
 resource "aws_iam_instance_profile" "instance" {
   name = "toolvault-${var.environment}-instance"
   role = aws_iam_role.instance.name
@@ -126,16 +111,6 @@ resource "aws_instance" "toolvault" {
   metadata_options {
     http_tokens   = "required" # IMDSv2 only
     http_endpoint = "enabled"
-    # Docker's bridge network adds a hop, so containers need a limit of 2 to
-    # reach IMDSv2 and use the instance role. AL2023 AMIs default to 2; pinned
-    # here so a different AMI (default 1) cannot quietly break the app.
-    http_put_response_hop_limit = 2
-  }
-
-  # The AMI lookup returns the newest image, which would otherwise force a
-  # replacement (and a fresh, empty DefectDojo) on any later apply.
-  lifecycle {
-    ignore_changes = [ami]
   }
 
   tags = {

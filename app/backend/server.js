@@ -21,10 +21,13 @@ import { EC2Client, DescribeInstancesCommand, DescribeSecurityGroupsCommand } fr
 const __filename = fileURLToPath(import.meta.url)
 const __dirname  = dirname(__filename)
 
-// No explicit credentials: the SDK's default chain picks up AWS_* env vars
-// locally and the instance role on EC2. Passing env vars that are unset makes
-// every call fail with "Resolved credential object is not valid".
-const ec2Client = new EC2Client({ region: process.env.AWS_REGION });
+const ec2Client = new EC2Client({
+  region: process.env.AWS_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+  }
+});
 
 
 if (!process.env.JWT_SECRET) {
